@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use druid::{Widget, widget::{Flex, MainAxisAlignment, List, Label, CrossAxisAlignment}, WidgetExt, im};
+use druid::{Widget, widget::{Flex, MainAxisAlignment, List, Label, CrossAxisAlignment}, WidgetExt, im, Color};
 
 use crate::state::{AppState, ClientInfo};
 
@@ -13,6 +13,8 @@ pub fn app_widget() -> impl Widget<AppState> {
             QrWidget::new()
                 .fix_size(350., 350.)
                 .nonmut_wrap(|s: &AppState| Arc::new(s.qr_code().unwrap()))
+                .padding(20.)
+                .background(Color::WHITE)
         )
         .with_spacer(20.)
         .with_child(
