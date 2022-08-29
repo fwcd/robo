@@ -6,3 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+druid = { git = "https://github.com/linebender/druid.git", rev = "0ebb799" }
+tokio = { version = "1.20", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1.0"
