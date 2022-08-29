@@ -32,11 +32,13 @@ impl Widget<Arc<QrCode>> for QrWidget {
     fn paint(&mut self, ctx: &mut PaintCtx, data: &Arc<QrCode>, _env: &Env) {
         let size = ctx.size();
         let qr_size = data.size();
-        let mod_size = Size::new(size.width / qr_size as f64, size.height / qr_size as f64);
+        let mod_width = (size.width / qr_size as f64).round();
+        let mod_height = (size.height / qr_size as f64).round();
+        let mod_size = Size::new(mod_width, mod_height);
         for y in 0..qr_size {
             for x in 0..qr_size {
                 let rect = Rect::from_origin_size(
-                    Point::new(x as f64 * mod_size.width, y as f64 * mod_size.height),
+                    Point::new(x as f64 * mod_width, y as f64 * mod_height),
                     mod_size
                 );
                 let color = if data.get_module(x, y) { Color::BLACK } else { Color::WHITE };

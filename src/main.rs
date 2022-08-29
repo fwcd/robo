@@ -1,9 +1,13 @@
 mod ui;
 
+use std::sync::Arc;
+
 use clap::Parser;
 use druid::{AppLauncher, WindowDesc, widget::Label};
+use qrcodegen::{QrCode, QrCodeEcc};
 use tokio::net::TcpListener;
 use tracing::info;
+use ui::QrWidget;
 
 fn bootstrap_tracing() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
@@ -22,8 +26,8 @@ fn bootstrap_server(host: String, port: u16) {
 }
 
 fn run_gui() {
-    let state = ();
-    let window = WindowDesc::new(Label::new("Hello world!"))
+    let state = Arc::new(QrCode::encode_text("Hello world!", QrCodeEcc::Medium).unwrap());
+    let window = WindowDesc::new(QrWidget::new())
         .title("Robo")
         .window_size((640., 480.));
     AppLauncher::with_window(window)
