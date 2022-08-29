@@ -1,13 +1,13 @@
 mod ui;
-
-use std::sync::Arc;
+mod state;
 
 use clap::Parser;
-use druid::{AppLauncher, WindowDesc, widget::Label};
-use qrcodegen::{QrCode, QrCodeEcc};
+use druid::{AppLauncher, WindowDesc};
+use local_ip_address::local_ip;
+use state::AppState;
 use tokio::net::TcpListener;
 use tracing::info;
-use ui::QrWidget;
+use ui::app_widget;
 
 fn bootstrap_tracing() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
@@ -15,7 +15,8 @@ fn bootstrap_tracing() {
         .expect("Could not set up tracing subscriber");
 }
 
-fn bootstrap_server(host: String, port: u16) {
+fn bootstrap_server(host: &str, port: u16) {
+    let host = host.to_owned();
     tokio::spawn(async move {
         let listener = TcpListener::bind((host, port)).await.expect("Could not start TCP server");
         while let Ok((stream, client_addr)) = listener.accept().await {
@@ -25,11 +26,18 @@ fn bootstrap_server(host: String, port: u16) {
     });
 }
 
-fn run_gui() {
-    let state = Arc::new(QrCode::encode_text("Hello world!", QrCodeEcc::Medium).unwrap());
-    let window = WindowDesc::new(QrWidget::new())
+fn run_gui(host: &str, port: u16) {
+    let host = if host == "0.0.0.0" {
+        local_ip().expect("No local IP found").to_string()
+    } else {
+        host.to_owned()
+    };
+
+    let state = AppState::new(host, port);
+    let window = WindowDesc::new(app_widget())
         .title("Robo")
         .window_size((640., 480.));
+
     AppLauncher::with_window(window)
         .launch(state)
         .expect("Could not launch GUI");
@@ -50,6 +58,6 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     bootstrap_tracing();
-    bootstrap_server(args.host, args.port);
-    run_gui();
+    bootstrap_server(&args.host, args.port);
+    run_gui(&args.host, args.port);
 }

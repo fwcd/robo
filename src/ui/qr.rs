@@ -26,7 +26,7 @@ impl Widget<Arc<QrCode>> for QrWidget {
     }
 
     fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &Arc<QrCode>, _env: &Env) -> Size {
-        bc.constrain_aspect_ratio(1.0, bc.min().width)
+        bc.min()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &Arc<QrCode>, _env: &Env) {
