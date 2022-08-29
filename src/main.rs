@@ -1,3 +1,5 @@
+mod ui;
+
 use clap::Parser;
 use druid::{AppLauncher, WindowDesc, widget::Label};
 use tokio::net::TcpListener;
