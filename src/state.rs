@@ -1,9 +1,9 @@
 use anyhow::Result;
-use druid::{im, Data};
+use druid::{im, Data, Lens};
 use qrcodegen::{QrCode, QrCodeEcc};
 use serde::{Serialize, Deserialize};
 
-#[derive(Data, Clone, Debug)]
+#[derive(Data, Lens, Clone, Debug)]
 pub struct AppState {
     pub server_info: ServerInfo,
     pub connected_clients: im::Vector<ClientInfo>,
