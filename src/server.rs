@@ -5,7 +5,7 @@ use async_tungstenite::{tokio::accept_async, tungstenite::Message};
 use druid::ExtEventSink;
 use futures::StreamExt;
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{info, error, warn, debug};
+use tracing::{info, error, warn};
 
 use crate::{state::{AppState, ClientInfo}, controller::Controller};
 
