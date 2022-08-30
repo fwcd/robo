@@ -1,15 +1,13 @@
 mod ui;
+mod server;
 mod state;
 
 use clap::Parser;
 use druid::{AppLauncher, WindowDesc, ExtEventSink};
 use local_ip_address::local_ip;
+use server::run_server;
 use state::AppState;
-use tokio::net::TcpListener;
-use tracing::info;
 use ui::app_widget;
-
-use crate::state::ClientInfo;
 
 fn bootstrap_tracing() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
@@ -20,16 +18,7 @@ fn bootstrap_tracing() {
 fn bootstrap_server(host: &str, port: u16, event_sink: ExtEventSink) {
     let host = host.to_owned();
     tokio::spawn(async move {
-        let listener = TcpListener::bind((host, port)).await.expect("Could not start TCP server");
-        while let Ok((stream, client_addr)) = listener.accept().await {
-            info!("Incoming connection from {}", client_addr);
-            event_sink.add_idle_callback(move |state: &mut AppState| {
-                state.connected_clients.push_back(ClientInfo {
-                    name: client_addr.to_string(),
-                });
-            });
-            // TODO
-        }
+        run_server(&host, port, event_sink).await;
     });
 }
 
