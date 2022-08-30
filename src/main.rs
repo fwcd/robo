@@ -1,4 +1,6 @@
 mod ui;
+mod controller;
+mod protocol;
 mod server;
 mod state;
 
