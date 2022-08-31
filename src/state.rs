@@ -31,7 +31,7 @@ impl AppState {
 
     pub fn qr_code(&self) -> Result<QrCode> {
         let json = serde_json::to_string(&self.server_info)?;
-        let qr = QrCode::encode_text(&json, QrCodeEcc::Medium)?;
+        let qr = QrCode::encode_text(&format!("robo:{}", json), QrCodeEcc::Medium)?;
         Ok(qr)
     }
 }
