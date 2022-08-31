@@ -56,6 +56,7 @@ pub async fn handle_client(stream: TcpStream, addr: SocketAddr, event_sink: Opti
 }
 
 pub async fn run_server(host: &str, port: u16, event_sink: Option<ExtEventSink>) {
+    info!("Starting server on {}:{}", host, port);
     let listener = TcpListener::bind((host, port)).await.expect("Could not start TCP server");
     while let Ok((stream, client_addr)) = listener.accept().await {
         let event_sink = event_sink.clone();
