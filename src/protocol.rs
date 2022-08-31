@@ -7,6 +7,7 @@ pub struct Vec2<T> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum MouseButton {
     Left,
     Middle,
@@ -18,7 +19,7 @@ impl Default for MouseButton {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum Action {
     // Keyboard
     KeySequence { text: String },
