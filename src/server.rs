@@ -7,7 +7,7 @@ use futures::StreamExt;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{info, error, warn};
 
-use crate::{state::{AppState, ClientInfo}, controller::Controller};
+use crate::{state::{AppState, ClientInfo}, controller::Controller, security::Security};
 
 async fn run_client_loop(name: &str, stream: TcpStream) -> Result<()> {
     let mut controller = Controller::new();
@@ -30,7 +30,7 @@ async fn run_client_loop(name: &str, stream: TcpStream) -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_client(stream: TcpStream, addr: SocketAddr, event_sink: Option<ExtEventSink>) {
+pub async fn handle_client(stream: TcpStream, addr: SocketAddr, security: impl Security, event_sink: Option<ExtEventSink>) {
     let name = addr.to_string();
     info!("Client {} connected!", name);
 
@@ -55,13 +55,14 @@ pub async fn handle_client(stream: TcpStream, addr: SocketAddr, event_sink: Opti
     info!("Client {} disconnected", name);
 }
 
-pub async fn run_server(host: &str, port: u16, event_sink: Option<ExtEventSink>) {
+pub async fn run_server(host: &str, port: u16, security: impl Security + Clone + Send + 'static, event_sink: Option<ExtEventSink>) {
     info!("Starting server on {}:{}", host, port);
     let listener = TcpListener::bind((host, port)).await.expect("Could not start TCP server");
     while let Ok((stream, client_addr)) = listener.accept().await {
         let event_sink = event_sink.clone();
+        let security = security.clone();
         tokio::spawn(async move {
-            handle_client(stream, client_addr, event_sink).await;
+            handle_client(stream, client_addr, security, event_sink).await;
         });
     }
 }

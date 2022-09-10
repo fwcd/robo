@@ -20,6 +20,7 @@ pub trait Security {
 }
 
 /// A `Security` implementation that does not encrypt.
+#[derive(Clone, Copy, Debug)]
 pub struct NoSecurity;
 
 impl Security for NoSecurity {
@@ -38,6 +39,7 @@ impl Security for NoSecurity {
 
 /// A security implementation that uses ChaCha20-Poly1305
 /// for symmetric, authenticated encryption.
+#[derive(Clone, Debug)]
 pub struct ChaChaPolySecurity {
     rng: SystemRandom,
     key: Vec<u8>,

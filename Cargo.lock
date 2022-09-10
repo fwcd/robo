@@ -1484,6 +1484,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-tungstenite",
+ "base64",
  "bincode",
  "clap",
  "druid",
