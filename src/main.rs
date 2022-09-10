@@ -28,7 +28,7 @@ fn bootstrap_server(host: &str, port: u16, security: impl Security + Clone + Sen
     let host = host.to_owned();
     let security_info = derive_security_info(&security);
     let handle = tokio::spawn(async move {
-        run_server(&host, port, NoSecurity, event_sink).await;
+        run_server(&host, port, security, event_sink).await;
     });
     (handle, security_info)
 }
