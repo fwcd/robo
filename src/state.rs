@@ -15,6 +15,7 @@ pub struct ClientInfo {
 }
 
 #[derive(Data, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SecurityInfo {
     /// The security kind.
     pub kind: String,
