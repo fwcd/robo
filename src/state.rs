@@ -15,16 +15,37 @@ pub struct ClientInfo {
 }
 
 #[derive(Data, Clone, Debug, Serialize, Deserialize)]
+pub struct SecurityInfo {
+    /// The security kind.
+    pub kind: String,
+    /// The base64-encoded key.
+    pub key_base64: String,
+}
+
+#[derive(Data, Clone, Debug, Serialize, Deserialize)]
 pub struct ServerInfo {
     pub host: String,
     pub port: u16,
-    // TODO: Encryption key
+    pub security: SecurityInfo,
+}
+
+impl SecurityInfo {
+    pub fn new(kind: String, key: &[u8]) -> Self {
+        Self {
+            kind,
+            key_base64: base64::encode(key),
+        }
+    }
 }
 
 impl AppState {
-    pub fn new(host: String, port: u16) -> Self {
+    pub fn new(host: String, port: u16, security: SecurityInfo) -> Self {
         Self {
-            server_info: ServerInfo { host, port },
+            server_info: ServerInfo {
+                host,
+                port,
+                security,
+            },
             connected_clients: im::Vector::new(),
         }
     }
