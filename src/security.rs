@@ -1,8 +1,7 @@
 use std::convert::TryInto;
 
 use anyhow::{Result, anyhow};
-use ring::{aead::{CHACHA20_POLY1305, NONCE_LEN, chacha20_poly1305_openssh::TAG_LEN, LessSafeKey, UnboundKey, Nonce, Aad}, rand::{SystemRandom, SecureRandom}};
-use serde::{Serialize, Deserialize};
+use ring::{aead::{CHACHA20_POLY1305, NONCE_LEN, LessSafeKey, UnboundKey, Nonce, Aad}, rand::{SystemRandom, SecureRandom}};
 
 /// An optional layer of encryption.
 pub trait Security {
@@ -45,15 +44,6 @@ pub struct ChaChaPolySecurity {
     key: Vec<u8>,
 }
 
-/// A sealed box containing an authenticated ciphertext
-/// encrypted with ChaCha20-Poly1305.
-#[derive(Serialize, Deserialize)]
-pub struct ChaChaPolyBox {
-    nonce: [u8; NONCE_LEN],
-    tag: [u8; TAG_LEN],
-    ciphertext: Vec<u8>,
-}
-
 impl ChaChaPolySecurity {
     pub fn new() -> Result<Self> {
         let mut key = vec![0u8; CHACHA20_POLY1305.key_len()];
@@ -81,26 +71,22 @@ impl Security for ChaChaPolySecurity {
         let key = self.less_safe_key()?;
 
         let mut buffer = plaintext.to_vec();
-        let tag = key.seal_in_place_separate_tag(
+        key.seal_in_place_append_tag(
             Nonce::assume_unique_for_key(nonce),
             Aad::empty(),
             &mut buffer
-        ).map_err(|_| anyhow!("Could not seal message"))?.as_ref().try_into().unwrap();
+        ).map_err(|_| anyhow!("Could not seal message"))?;
 
-        let sealed_box = ChaChaPolyBox { nonce, tag, ciphertext: buffer };
-        let sealed_box_bytes = bincode::serialize(&sealed_box)?;
-
-        Ok(sealed_box_bytes)
+        let sealed_box = nonce.into_iter().chain(buffer).collect();
+        Ok(sealed_box)
     }
 
-    fn open(&self, sealed_box_bytes: &[u8]) -> Result<Vec<u8>> {
-        let sealed_box: ChaChaPolyBox = bincode::deserialize(sealed_box_bytes)?;
-        let nonce = sealed_box.nonce;
+    fn open(&self, sealed_box: &[u8]) -> Result<Vec<u8>> {
+        let nonce: [u8; NONCE_LEN] = sealed_box[..NONCE_LEN].try_into().unwrap();
 
         let key = self.less_safe_key()?;
 
-        let mut buffer = sealed_box.ciphertext.to_vec();
-        buffer.extend(sealed_box.tag);
+        let mut buffer = sealed_box[NONCE_LEN..].to_vec();
         let plaintext = key.open_in_place(
             Nonce::assume_unique_for_key(nonce),
             Aad::empty(),
