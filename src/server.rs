@@ -7,7 +7,14 @@ use futures::StreamExt;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{info, error, warn};
 
-use crate::{state::{AppState, ClientInfo}, controller::Controller, security::Security};
+use crate::{state::{AppState, ClientInfo}, controller::Controller, security::Security, protocol::Action};
+
+fn decode_action(raw: &[u8], security: &impl Security) -> Result<Action> {
+    let raw = security.open(&raw)?;
+    let raw_str = str::from_utf8(raw.as_ref())?;
+    let action = serde_json::from_str(raw_str)?;
+    Ok(action)
+}
 
 async fn run_client_loop(name: &str, stream: TcpStream, security: impl Security) -> Result<()> {
     let mut controller = Controller::new();
@@ -15,11 +22,7 @@ async fn run_client_loop(name: &str, stream: TcpStream, security: impl Security)
     while let Some(msg) = ws_stream.next().await {
         match msg? {
             Message::Binary(raw) => {
-                match {
-                    let raw = security.open(&raw)?;
-                    let raw_str = str::from_utf8(raw.as_ref())?;
-                    serde_json::from_str(raw_str)
-                } {
+                match decode_action(&raw, &security) {
                     Ok(action) => {
                         info!("Client {} sent {:?}", name, action);
                         controller.perform(action)
