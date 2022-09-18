@@ -4,9 +4,9 @@ use super::Security;
 
 /// A `Security` implementation that does not encrypt.
 #[derive(Clone, Copy, Debug)]
-pub struct NoSecurity;
+pub struct EmptySecurity;
 
-impl Security for NoSecurity {
+impl Security for EmptySecurity {
     fn kind(&self) -> &'static str { "none" }
 
     fn key(&self) -> Option<&[u8]> { None }

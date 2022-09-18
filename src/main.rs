@@ -9,7 +9,7 @@ mod utils;
 use std::sync::Arc;
 
 use clap::Parser;
-use security::{ChaChaPolySecurity, NoSecurity, Security};
+use security::{ChaChaPolySecurity, EmptySecurity, Security};
 use server::ServerContext;
 use tokio::sync::mpsc;
 
@@ -42,7 +42,7 @@ fn main() {
     let Args { host, port, insecure, headless } = Args::parse();
 
     let security: Arc<dyn Security + Send + Sync> = if insecure {
-        Arc::new(NoSecurity)
+        Arc::new(EmptySecurity)
     } else {
         Arc::new(ChaChaPolySecurity::new().expect("Could not set up security"))
     };
