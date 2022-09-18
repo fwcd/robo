@@ -1,40 +1,7 @@
-use std::convert::TryInto;
-
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use ring::{aead::{CHACHA20_POLY1305, NONCE_LEN, LessSafeKey, UnboundKey, Nonce, Aad}, rand::{SystemRandom, SecureRandom}};
 
-/// An optional layer of encryption.
-pub trait Security {
-    /// The kind of security.
-    fn kind(&self) -> &'static str;
-
-    /// The key for encryption that is shared with the client, if used.
-    fn key(&self) -> Option<&[u8]>;
-
-    /// Encrypts a message (if needed).
-    fn seal(&self, value: &[u8]) -> Result<Vec<u8>>;
-
-    /// Decrypts a message (if needed).
-    fn open(&self, value: &[u8]) -> Result<Vec<u8>>;
-}
-
-/// A `Security` implementation that does not encrypt.
-#[derive(Clone, Copy, Debug)]
-pub struct NoSecurity;
-
-impl Security for NoSecurity {
-    fn kind(&self) -> &'static str { "none" }
-
-    fn key(&self) -> Option<&[u8]> { None }
-
-    fn seal(&self, value: &[u8]) -> Result<Vec<u8>> {
-        Ok(value.to_vec())
-    }
-
-    fn open(&self, value: &[u8]) -> Result<Vec<u8>> {
-        Ok(value.to_vec())
-    }
-}
+use super::Security;
 
 /// A security implementation that uses ChaCha20-Poly1305
 /// for symmetric, authenticated encryption.
