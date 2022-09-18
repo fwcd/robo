@@ -2,12 +2,25 @@ use std::{str, net::SocketAddr};
 
 use anyhow::Result;
 use async_tungstenite::{tokio::accept_async, tungstenite::Message};
-use druid::ExtEventSink;
 use futures::StreamExt;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{net::{TcpListener, TcpStream}, sync::mpsc};
 use tracing::{info, error, warn};
 
-use crate::{state::{AppState, ClientInfo}, controller::Controller, security::Security, protocol::Action};
+use crate::{state::ClientInfo, security::Security, protocol::Action};
+
+#[derive(Debug)]
+pub enum MainThreadMessage {
+    Perform(Action),
+    DidConnect(ClientInfo),
+    DidDisconnect(ClientInfo),
+    DidExit,
+}
+
+#[derive(Clone)]
+pub struct ServerContext<S> {
+    pub security: S,
+    pub main_thread_tx: mpsc::Sender<MainThreadMessage>,
+}
 
 fn decode_action(raw: &[u8], security: &impl Security) -> Result<Action> {
     let raw = security.open(&raw)?;
@@ -16,16 +29,16 @@ fn decode_action(raw: &[u8], security: &impl Security) -> Result<Action> {
     Ok(action)
 }
 
-async fn run_client_loop(name: &str, stream: TcpStream, security: impl Security) -> Result<()> {
-    let mut controller = Controller::new();
+async fn run_client_loop(name: &str, stream: TcpStream, ctx: ServerContext<impl Security + Clone + Send>) -> Result<()> {
     let mut ws_stream = accept_async(stream).await?;
     while let Some(msg) = ws_stream.next().await {
         match msg? {
             Message::Binary(raw) => {
-                match decode_action(&raw, &security) {
+                let action = decode_action(&raw, &ctx.security);
+                match action {
                     Ok(action) => {
                         info!("Client {} sent {:?}", name, action);
-                        controller.perform(action)
+                        ctx.main_thread_tx.send(MainThreadMessage::Perform(action)).await?;
                     },
                     Err(e) => warn!("Could not decode action: {}", e),
                 }
@@ -37,41 +50,36 @@ async fn run_client_loop(name: &str, stream: TcpStream, security: impl Security)
     Ok(())
 }
 
-pub async fn handle_client(stream: TcpStream, addr: SocketAddr, security: impl Security, event_sink: Option<ExtEventSink>) {
-    let name = addr.to_string();
-    info!("Client {} connected!", name);
+pub async fn handle_client(stream: TcpStream, addr: SocketAddr, ctx: ServerContext<impl Security + Clone + Send + 'static>) -> Result<()> {
+    let info = ClientInfo { name: addr.to_string() };
 
-    if let Some(ref event_sink) = event_sink {
-        let name = name.clone();
-        event_sink.add_idle_callback(move |state: &mut AppState| {
-            state.connected_clients.push_back(ClientInfo { name });
-        });
+    ctx.main_thread_tx.send(MainThreadMessage::DidConnect(info.clone())).await?;
+    info!("Client {} connected!", info.name);
+
+    {
+        let ctx = ctx.clone();
+        if let Err(e) = run_client_loop(&info.name, stream, ctx).await {
+            error!("Error while running client loop: {}", e);
+        };
     }
 
-    if let Err(e) = run_client_loop(&name, stream, security).await {
-        error!("Error while running client loop: {}", e);
-    };
+    ctx.main_thread_tx.send(MainThreadMessage::DidDisconnect(info.clone())).await?;
+    info!("Client {} disconnected", info.name);
 
-    if let Some(ref event_sink) = event_sink {
-        let name = name.clone();
-        event_sink.add_idle_callback(move |state: &mut AppState| {
-            state.connected_clients.retain(|c| c.name != name);
-        });
-    }
-
-    info!("Client {} disconnected", name);
+    Ok(())
 }
 
-pub async fn run_server(host: &str, port: u16, security: impl Security + Clone + Send + 'static, event_sink: Option<ExtEventSink>) {
+pub async fn run_server(host: &str, port: u16, ctx: ServerContext<impl Security + Clone + Send + 'static>) {
     info!("Starting server on {}:{}", host, port);
-    info!("Security: {} (key: {})", security.kind(), security.key().map(base64::encode).unwrap_or_else(|| "none".to_owned()));
+    info!("Security: {} (key: {})", ctx.security.kind(), ctx.security.key().map(base64::encode).unwrap_or_else(|| "none".to_owned()));
 
     let listener = TcpListener::bind((host, port)).await.expect("Could not start TCP server");
     while let Ok((stream, client_addr)) = listener.accept().await {
-        let event_sink = event_sink.clone();
-        let security = security.clone();
+        let ctx = ctx.clone();
         tokio::spawn(async move {
-            handle_client(stream, client_addr, security, event_sink).await;
+            handle_client(stream, client_addr, ctx).await.expect("Error while handling client");
         });
     }
+
+    ctx.main_thread_tx.send(MainThreadMessage::DidExit).await.expect("Could not send exit message to main thread");
 }
