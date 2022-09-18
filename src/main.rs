@@ -15,7 +15,7 @@ use local_ip_address::local_ip;
 use security::{ChaChaPolySecurity, NoSecurity, Security};
 use server::{run_server, ServerContext, MainThreadMessage};
 use state::{AppState, SecurityInfo};
-use tokio::{task::JoinHandle, sync::mpsc};
+use tokio::sync::mpsc;
 use ui::app_widget;
 use utils::UnsafeSync;
 
@@ -23,14 +23,6 @@ fn bootstrap_tracing() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
     tracing::subscriber::set_global_default(subscriber)
         .expect("Could not set up tracing subscriber");
-}
-
-fn bootstrap_server(host: &str, port: u16, security: Arc<dyn Security + Send + Sync>, main_thread_tx: mpsc::Sender<MainThreadMessage>) -> JoinHandle<()> {
-    let host = host.to_owned();
-    let ctx = ServerContext { security, main_thread_tx };
-    tokio::spawn(async move {
-        run_server(&host, port, ctx).await;
-    })
 }
 
 fn derive_security_info(security: &dyn Security) -> SecurityInfo {
@@ -62,7 +54,15 @@ async fn run_gui_main_msg_loop(mut rx: mpsc::Receiver<MainThreadMessage>, event_
     }
 }
 
-fn run_gui(host: &str, port: u16, security_info: SecurityInfo, rx: mpsc::Receiver<MainThreadMessage>) {
+fn gui_launcher() -> AppLauncher<AppState> {
+    let window = WindowDesc::new(app_widget())
+        .title("Robo")
+        .window_size((640., 480.));
+
+    AppLauncher::with_window(window)
+}
+
+fn run_gui(launcher: AppLauncher<AppState>, host: &str, port: u16, security_info: SecurityInfo) {
     let host = if host == "0.0.0.0" {
         local_ip().expect("No local IP found").to_string()
     } else {
@@ -70,24 +70,15 @@ fn run_gui(host: &str, port: u16, security_info: SecurityInfo, rx: mpsc::Receive
     };
 
     let state = AppState::new(host, port, security_info);
-    let window = WindowDesc::new(app_widget())
-        .title("Robo")
-        .window_size((640., 480.));
-    let launcher = AppLauncher::with_window(window);
-    let event_sink = launcher.get_external_handle();
     
-    tokio::spawn(async move {
-        run_gui_main_msg_loop(rx, event_sink).await;
-    });
-
     launcher
         .launch(state)
         .expect("Could not launch app")
 }
 
-async fn run_headless_main_msg_loop(mut rx: mpsc::Receiver<MainThreadMessage>) {
+fn run_headless_main_msg_loop(mut rx: mpsc::Receiver<MainThreadMessage>) {
     let mut controller = Controller::new();
-    while let Some(msg) = rx.recv().await {
+    while let Some(msg) = rx.blocking_recv() {
         match msg {
             MainThreadMessage::Perform(action) => controller.perform(action),
             MainThreadMessage::DidExit => break,
@@ -113,8 +104,7 @@ struct Args {
     headless: bool,
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     bootstrap_tracing();
 
     let Args { host, port, insecure, headless } = Args::parse();
@@ -124,15 +114,39 @@ async fn main() {
     } else {
         Arc::new(ChaChaPolySecurity::new().expect("Could not set up security"))
     };
-
     let security_info = derive_security_info(&*security);
-    bootstrap_server(&host, port, security, tx);
+    let ctx = ServerContext { security, main_thread_tx: tx };
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_io()
+        .worker_threads(4)
+        .build()
+        .expect("Could not create Tokio runtime");
     
     if headless {
-        // In headless mode we run a 'event loop' that handles messages from the server
-        run_headless_main_msg_loop(rx).await;
+        // In headless mode we run a custom 'event loop' that handles messages from the server.
+
+        runtime.spawn(async move {
+            run_server(&host, port, ctx).await;
+        });
+
+        run_headless_main_msg_loop(rx);
     } else {
-        // In non-headless mode the GUI's event loop blocks the main thread
-        run_gui(&host, port, security_info, rx);
+        // In GUI mode druid's event loop blocks the main thread
+
+        let launcher = gui_launcher();
+        let event_sink = launcher.get_external_handle();
+
+        {
+            let host = host.clone();
+            runtime.spawn(async move {
+                tokio::spawn(async move {
+                    run_gui_main_msg_loop(rx, event_sink).await;
+                });
+                run_server(&host, port, ctx).await;
+            });
+        }
+
+        run_gui(launcher, &host, port, security_info);
     }
 }
