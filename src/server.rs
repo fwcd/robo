@@ -1,4 +1,4 @@
-use std::{str, net::SocketAddr};
+use std::{str, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use async_tungstenite::{tokio::accept_async, tungstenite::Message};
@@ -17,24 +17,24 @@ pub enum MainThreadMessage {
 }
 
 #[derive(Clone)]
-pub struct ServerContext<S> {
-    pub security: S,
+pub struct ServerContext {
+    pub security: Arc<dyn Security + Send + Sync>,
     pub main_thread_tx: mpsc::Sender<MainThreadMessage>,
 }
 
-fn decode_action(raw: &[u8], security: &impl Security) -> Result<Action> {
+fn decode_action(raw: &[u8], security: &dyn Security) -> Result<Action> {
     let raw = security.open(&raw)?;
     let raw_str = str::from_utf8(raw.as_ref())?;
     let action = serde_json::from_str(raw_str)?;
     Ok(action)
 }
 
-async fn run_client_loop(name: &str, stream: TcpStream, ctx: ServerContext<impl Security + Clone + Send>) -> Result<()> {
+async fn run_client_loop(name: &str, stream: TcpStream, ctx: ServerContext) -> Result<()> {
     let mut ws_stream = accept_async(stream).await?;
     while let Some(msg) = ws_stream.next().await {
         match msg? {
             Message::Binary(raw) => {
-                let action = decode_action(&raw, &ctx.security);
+                let action = decode_action(&raw, &*ctx.security);
                 match action {
                     Ok(action) => {
                         info!("Client {} sent {:?}", name, action);
@@ -50,7 +50,7 @@ async fn run_client_loop(name: &str, stream: TcpStream, ctx: ServerContext<impl 
     Ok(())
 }
 
-pub async fn handle_client(stream: TcpStream, addr: SocketAddr, ctx: ServerContext<impl Security + Clone + Send + 'static>) -> Result<()> {
+pub async fn handle_client(stream: TcpStream, addr: SocketAddr, ctx: ServerContext) -> Result<()> {
     let info = ClientInfo { name: addr.to_string() };
 
     ctx.main_thread_tx.send(MainThreadMessage::DidConnect(info.clone())).await?;
@@ -69,7 +69,7 @@ pub async fn handle_client(stream: TcpStream, addr: SocketAddr, ctx: ServerConte
     Ok(())
 }
 
-pub async fn run_server(host: &str, port: u16, ctx: ServerContext<impl Security + Clone + Send + 'static>) {
+pub async fn run_server(host: &str, port: u16, ctx: ServerContext) {
     info!("Starting server on {}:{}", host, port);
     info!("Security: {} (key: {})", ctx.security.kind(), ctx.security.key().map(base64::encode).unwrap_or_else(|| "none".to_owned()));
 

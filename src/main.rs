@@ -25,7 +25,7 @@ fn bootstrap_tracing() {
         .expect("Could not set up tracing subscriber");
 }
 
-fn bootstrap_server(host: &str, port: u16, security: impl Security + Clone + Send + 'static, main_thread_tx: mpsc::Sender<MainThreadMessage>) -> JoinHandle<()> {
+fn bootstrap_server(host: &str, port: u16, security: Arc<dyn Security + Send + Sync>, main_thread_tx: mpsc::Sender<MainThreadMessage>) -> JoinHandle<()> {
     let host = host.to_owned();
     let ctx = ServerContext { security, main_thread_tx };
     tokio::spawn(async move {
@@ -33,7 +33,7 @@ fn bootstrap_server(host: &str, port: u16, security: impl Security + Clone + Sen
     })
 }
 
-fn derive_security_info(security: &impl Security) -> SecurityInfo {
+fn derive_security_info(security: &dyn Security) -> SecurityInfo {
     SecurityInfo::new(security.kind().to_owned(), security.key().unwrap_or_default())
 }
 
@@ -117,24 +117,22 @@ struct Args {
 async fn main() {
     bootstrap_tracing();
 
-    let args = Args::parse();
+    let Args { host, port, insecure, headless } = Args::parse();
     let (tx, rx) = mpsc::channel(4);
-
-    let (_server_handle, security_info) = if args.insecure {
-        let security = NoSecurity;
-        let info = derive_security_info(&security);
-        (bootstrap_server(&args.host, args.port, security, tx), info)
+    let security: Arc<dyn Security + Send + Sync> = if insecure {
+        Arc::new(NoSecurity)
     } else {
-        let security = ChaChaPolySecurity::new().expect("Could not set up security");
-        let info = derive_security_info(&security);
-        (bootstrap_server(&args.host, args.port, security, tx), info)
+        Arc::new(ChaChaPolySecurity::new().expect("Could not set up security"))
     };
+
+    let security_info = derive_security_info(&*security);
+    bootstrap_server(&host, port, security, tx);
     
-    if args.headless {
+    if headless {
         // In headless mode we run a 'event loop' that handles messages from the server
         run_headless_main_msg_loop(rx).await;
     } else {
         // In non-headless mode the GUI's event loop blocks the main thread
-        run_gui(&args.host, args.port, security_info, rx);
+        run_gui(&host, port, security_info, rx);
     }
 }
