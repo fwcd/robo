@@ -4,6 +4,9 @@ mod protocol;
 mod security;
 mod server;
 mod state;
+mod utils;
+
+use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use controller::Controller;
@@ -14,6 +17,7 @@ use server::{run_server, ServerContext, MainThreadMessage};
 use state::{AppState, SecurityInfo};
 use tokio::{task::JoinHandle, sync::mpsc};
 use ui::app_widget;
+use utils::UnsafeSync;
 
 fn bootstrap_tracing() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
@@ -34,20 +38,27 @@ fn derive_security_info(security: &impl Security) -> SecurityInfo {
 }
 
 async fn run_gui_main_msg_loop(mut rx: mpsc::Receiver<MainThreadMessage>, event_sink: ExtEventSink) {
-    let mut controller = Controller::new();
+    // We use `UnsafeSync` since the compiler cannot verify that we indeed always call the controller
+    // from the same (main) thread due to our use of idle callbacks.
+    let controller = Arc::new(Mutex::new(UnsafeSync::new(Controller::new())));
+
     while let Some(msg) = rx.recv().await {
-        match msg {
-            MainThreadMessage::Perform(action) => controller.perform(action),
-            MainThreadMessage::DidConnect(client) => event_sink.add_idle_callback(move |state: &mut AppState| {
-                state.connected_clients.push_back(client);
-            }),
-            MainThreadMessage::DidDisconnect(client) => event_sink.add_idle_callback(move |state: &mut AppState| {
-                // TODO: Identify clients exactly, we currently rely on uniqueness of names
-                // (which currently is given since we name clients after their IP + port)
-                state.connected_clients.retain(|c| c.name != client.name);
-            }),
-            MainThreadMessage::DidExit => break,
-        }
+        if let MainThreadMessage::DidExit = msg {
+            break;
+        };
+        let controller = controller.clone();
+        event_sink.add_idle_callback(move |state: &mut AppState| {
+            match msg {
+                MainThreadMessage::Perform(action) => controller.lock().unwrap().perform(action),
+                MainThreadMessage::DidConnect(client) => state.connected_clients.push_back(client),
+                MainThreadMessage::DidDisconnect(client) => {
+                    // TODO: Identify clients exactly, we currently rely on uniqueness of names
+                    // (which currently is given since we name clients after their IP + port)
+                    state.connected_clients.retain(|c| c.name != client.name);
+                },
+                _ => {},
+            }
+        });
     }
 }
 
@@ -79,9 +90,8 @@ async fn run_headless_main_msg_loop(mut rx: mpsc::Receiver<MainThreadMessage>) {
     while let Some(msg) = rx.recv().await {
         match msg {
             MainThreadMessage::Perform(action) => controller.perform(action),
-            MainThreadMessage::DidConnect(_) => {},
-            MainThreadMessage::DidDisconnect(_) => {},
             MainThreadMessage::DidExit => break,
+            _ => {},
         }
     }
 }
@@ -103,12 +113,11 @@ struct Args {
     headless: bool,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() {
     bootstrap_tracing();
 
     let args = Args::parse();
-
     let (tx, rx) = mpsc::channel(4);
 
     let (_server_handle, security_info) = if args.insecure {
