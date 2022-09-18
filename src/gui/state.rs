@@ -3,15 +3,12 @@ use druid::{im, Data, Lens};
 use qrcodegen::{QrCode, QrCodeEcc};
 use serde::{Serialize, Deserialize};
 
+use crate::server::ClientInfo;
+
 #[derive(Data, Lens, Clone, Debug)]
 pub struct AppState {
     pub server_info: ServerInfo,
     pub connected_clients: im::Vector<ClientInfo>,
-}
-
-#[derive(Data, Clone, Debug)]
-pub struct ClientInfo {
-    pub name: String,
 }
 
 #[derive(Data, Clone, Debug, Serialize, Deserialize)]

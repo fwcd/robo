@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use druid::{Widget, widget::{Flex, MainAxisAlignment, List, Label, CrossAxisAlignment}, WidgetExt, im, Color};
 
-use crate::state::{AppState, ClientInfo};
+use crate::{gui::state::AppState, server::ClientInfo};
 
 use super::{QrWidget, NonMutWrappable};
 

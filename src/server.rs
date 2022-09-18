@@ -2,11 +2,17 @@ use std::{str, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use async_tungstenite::{tokio::accept_async, tungstenite::Message};
+use druid::Data;
 use futures::StreamExt;
 use tokio::{net::{TcpListener, TcpStream}, sync::mpsc};
 use tracing::{info, error, warn};
 
-use crate::{state::ClientInfo, security::Security, protocol::Action};
+use crate::{security::Security, protocol::Action};
+
+#[derive(Debug, Clone, Data)]
+pub struct ClientInfo {
+    pub name: String,
+}
 
 #[derive(Debug)]
 pub enum MainThreadMessage {
