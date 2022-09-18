@@ -1,9 +1,16 @@
 [package]
 name = "robo"
 version = "0.0.1"
+description = "Keyboard and mouse server"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.bundle]
+name = "Robo"
+identifier = "dev.fwcd.Robo"
+icon = ["images/icon/*.png"]
+copyright = "Copyright (c) fwcd 2022"
 
 [dependencies]
 clap = { version = "3.2", features = ["derive"] }
