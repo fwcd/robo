@@ -44,13 +44,16 @@ async fn run_main_msg_loop(mut rx: mpsc::Receiver<MainThreadMessage>, event_sink
     }
 }
 
-fn run(launcher: AppLauncher<AppState>, host: &str, port: u16, security_info: SecurityInfo) {
-    let host = if host == "0.0.0.0" {
+fn resolve_host(host: &str) -> String {
+    if host == "0.0.0.0" {
         local_ip().expect("No local IP found").to_string()
     } else {
         host.to_owned()
-    };
+    }
+}
 
+fn run(launcher: AppLauncher<AppState>, host: &str, port: u16, security_info: SecurityInfo) {
+    let host = resolve_host(host);
     let state = AppState::new(host, port, security_info);
     
     launcher
