@@ -7,7 +7,7 @@ use druid::{AppLauncher, WindowDesc, ExtEventSink};
 use local_ip_address::local_ip;
 use tokio::{runtime::Runtime, sync::mpsc};
 
-use crate::{security::Security, server::{MainThreadMessage, run_server, ServerContext}, utils::UnsafeSync, controller::Controller};
+use crate::{security::Security, server::{MainThreadMessage, ServerContext}, utils::UnsafeSync, controller::Controller};
 
 use self::{state::{AppState, SecurityInfo}, widget::app_widget};
 
@@ -44,7 +44,7 @@ async fn run_main_msg_loop(mut rx: mpsc::Receiver<MainThreadMessage>, event_sink
     }
 }
 
-fn run_gui(launcher: AppLauncher<AppState>, host: &str, port: u16, security_info: SecurityInfo) {
+fn run(launcher: AppLauncher<AppState>, host: &str, port: u16, security_info: SecurityInfo) {
     let host = if host == "0.0.0.0" {
         local_ip().expect("No local IP found").to_string()
     } else {
@@ -63,10 +63,8 @@ fn derive_security_info(security: &dyn Security) -> SecurityInfo {
 }
 
 pub fn bootstrap(
-    host: &str,
-    port: u16,
-    rx: mpsc::Receiver<MainThreadMessage>,
     ctx: ServerContext,
+    rx: mpsc::Receiver<MainThreadMessage>,
     runtime: Runtime
 ) {
     // In GUI mode druid's event loop blocks the main thread
@@ -75,15 +73,9 @@ pub fn bootstrap(
     let security_info = derive_security_info(&*ctx.security);
     let event_sink = launcher.get_external_handle();
 
-    {
-        let host = host.to_owned();
-        runtime.spawn(async move {
-            tokio::spawn(async move {
-                run_main_msg_loop(rx, event_sink).await;
-            });
-            run_server(&host, port, ctx).await;
-        });
-    }
+    runtime.spawn(async move {
+        run_main_msg_loop(rx, event_sink).await;
+    });
 
-    run_gui(launcher, &host, port, security_info);
+    run(launcher, &ctx.host, ctx.port, security_info);
 }

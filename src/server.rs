@@ -24,6 +24,8 @@ pub enum MainThreadMessage {
 
 #[derive(Clone)]
 pub struct ServerContext {
+    pub host: String,
+    pub port: u16,
     pub security: Arc<dyn Security + Send + Sync>,
     pub main_thread_tx: mpsc::Sender<MainThreadMessage>,
 }
@@ -75,7 +77,10 @@ pub async fn handle_client(stream: TcpStream, addr: SocketAddr, ctx: ServerConte
     Ok(())
 }
 
-pub async fn run_server(host: &str, port: u16, ctx: ServerContext) {
+pub async fn run(ctx: ServerContext) {
+    let host = ctx.host.clone();
+    let port = ctx.port;
+
     info!("Starting server on {}:{}", host, port);
     info!("Security: {} (key: {})", ctx.security.kind(), ctx.security.key().map(base64::encode).unwrap_or_else(|| "none".to_owned()));
 

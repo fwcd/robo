@@ -48,17 +48,24 @@ fn main() {
     };
 
     let (tx, rx) = mpsc::channel(4);
-    let ctx = ServerContext { security: security.clone(), main_thread_tx: tx };
+    let ctx = ServerContext { host, port, security: security.clone(), main_thread_tx: tx };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_io()
         .worker_threads(4)
         .build()
         .expect("Could not create Tokio runtime");
+
+    {
+        let ctx = ctx.clone();
+        runtime.spawn(async move {
+            server::run(ctx).await;
+        });
+    }
     
     if headless {
-        headless::bootstrap(&host, port, rx, ctx, runtime)
+        headless::bootstrap(rx)
     } else {
-        gui::bootstrap(&host, port, rx, ctx, runtime)
+        gui::bootstrap(ctx, rx, runtime)
     }
 }
