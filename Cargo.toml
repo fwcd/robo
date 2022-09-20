@@ -11,6 +11,7 @@ name = "Robo"
 identifier = "dev.fwcd.Robo"
 icon = ["images/icon/*.png"]
 copyright = "Copyright (c) fwcd 2022"
+osx_minimum_system_version = "11.0"
 
 [dependencies]
 clap = { version = "3.2", features = ["derive"] }
